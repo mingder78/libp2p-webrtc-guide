@@ -25,6 +25,7 @@ export function getPeerTypes(libp2p) {
     .map((conn) => conn.remoteAddr)
     .forEach((ma) => {
       if (WebRTC.exactMatch(ma)) {
+        console.log(ma)
         types['WebRTC']++
       } else if (WebRTCDirect.exactMatch(ma)) {
         types['WebRTC Direct']++

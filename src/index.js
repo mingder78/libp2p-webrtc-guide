@@ -17,19 +17,35 @@ import { circuitRelayTransport } from '@libp2p/circuit-relay-v2'
 
 const App = async () => {
   const libp2p = await createLibp2p({
-    // addresses: {
-    //   listen: [
-    //     // 👇 Required to create circuit relay reservations in order to hole punch browser-to-browser WebRTC connections
-    //     '/p2p-circuit',
-    //     // 👇 Listen for webRTC connection
-    //     '/webrtc',
-    //   ],
-    // },
-    transports: [
-      webSockets(),
-      webTransport(),
-      webRTC(),
-      circuitRelayTransport(),
+     addresses: {
+       listen: [
+         // 👇 Required to create circuit relay reservations in order to hole punch browser-to-browser WebRTC connections
+         '/p2p-circuit',
+         // 👇 Listen for webRTC connection
+         '/webrtc',
+       ],
+     },
+   transports: [  
+      webSockets({  
+        // 允許所有WebSocket連接包括不帶TLS的  
+        
+      }),  
+      webTransport(),  
+      webRTC({  
+        rtcConfiguration: {  
+          iceServers: [  
+            {  
+              // STUN servers help the browser discover its own public IPs  
+              urls: ['stun:stun.l.google.com:19302', 'stun:global.stun.twilio.com:3478'],  
+            },  
+          ],  
+        },  
+      }),  
+      // 👇 Required to create circuit relay reservations in order to hole punch browser-to-browser WebRTC connections  
+      // 添加@libp2p/circuit-relay-v2-transport支持  
+      circuitRelayTransport({  
+        discoverRelays: 1,  
+      }),  
     ],
     connectionEncrypters: [noise()],
     streamMuxers: [yamux()],
@@ -38,16 +54,16 @@ const App = async () => {
       denyDialMultiaddr: async () => false,
     },
     peerDiscovery: [
-      // bootstrap({
-      //   list: [''],
-      // }),
-      // pubsubPeerDiscovery({
-      //   interval: 10_000,
-      //   topics: [PUBSUB_PEER_DISCOVERY],
-      // }),
+       bootstrap({
+         list: ['/ip4/127.0.0.1/tcp/9001/ws/p2p/12D3KooWKh9Q2WTfTBQzBrX1EgWfqZr7KkXqHDYSzJtLojT3KZ6K'  ],
+       }),
+       pubsubPeerDiscovery({
+         interval: 10_000,
+         topics: [PUBSUB_PEER_DISCOVERY],
+       }),
     ],
     services: {
-      // pubsub: gossipsub(),
+      pubsub: gossipsub(),
       identify: identify(),
     },
   })
@@ -67,7 +83,6 @@ const App = async () => {
   //     console.error(`Failed to dial peer (${evt.detail.id.toString()}):`, err)
   //   }
   // })
-
 
   globalThis.libp2p = libp2p
 
