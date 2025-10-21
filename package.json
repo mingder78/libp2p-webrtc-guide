@@ -1,6 +1,6 @@
 {
   "name": "libp2p-webrtc-guide",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "description": "associated code for the libp2p webrtc guide",
@@ -43,6 +43,7 @@
     "@multiformats/multiaddr-matcher": "^1.2.4",
     "date-fns": "^3.6.0",
     "libp2p": "^2.8.12",
-    "pretty-ms": "^9.0.0"
+    "pretty-ms": "^9.0.0",
+    "ws": "^8.18.3"
   }
 }

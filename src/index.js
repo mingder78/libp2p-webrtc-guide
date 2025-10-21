@@ -1,141 +1,87 @@
 // @ts-check
-import { createLibp2p } from 'libp2p'
-import { identify } from '@libp2p/identify'
-import { noise } from '@chainsafe/libp2p-noise'
-import { yamux } from '@chainsafe/libp2p-yamux'
-import { multiaddr } from '@multiformats/multiaddr'
-import { gossipsub } from '@chainsafe/libp2p-gossipsub'
-import { webSockets } from '@libp2p/websockets'
-import { webTransport } from '@libp2p/webtransport'
-import { webRTC } from '@libp2p/webrtc'
-import { enable, disable } from '@libp2p/logger'
-import { pubsubPeerDiscovery } from '@libp2p/pubsub-peer-discovery'
-import { PUBSUB_PEER_DISCOVERY } from './constants'
-import { update, getPeerTypes, getAddresses, getPeerDetails } from './utils'
-import { bootstrap } from '@libp2p/bootstrap'
-import { circuitRelayTransport } from '@libp2p/circuit-relay-v2'
+import { multiaddr } from "@multiformats/multiaddr";
+import { enable, disable } from "@libp2p/logger";
+import { PUBSUB_PEER_DISCOVERY } from "./constants";
+import { update, getPeerTypes, getAddresses, getPeerDetails } from "./utils";
+import { createNewLibp2p } from "./utils";
 
 const App = async () => {
-  const libp2p = await createLibp2p({
-     addresses: {
-       listen: [
-         // 👇 Required to create circuit relay reservations in order to hole punch browser-to-browser WebRTC connections
-         '/p2p-circuit',
-         // 👇 Listen for webRTC connection
-         '/webrtc',
-       ],
-     },
-   transports: [  
-      webSockets({  
-        // 允許所有WebSocket連接包括不帶TLS的  
-        
-      }),  
-      webTransport(),  
-      webRTC({  
-        rtcConfiguration: {  
-          iceServers: [  
-            {  
-              // STUN servers help the browser discover its own public IPs  
-              urls: ['stun:stun.l.google.com:19302', 'stun:global.stun.twilio.com:3478'],  
-            },  
-          ],  
-        },  
-      }),  
-      // 👇 Required to create circuit relay reservations in order to hole punch browser-to-browser WebRTC connections  
-      // 添加@libp2p/circuit-relay-v2-transport支持  
-      circuitRelayTransport({  
-        discoverRelays: 1,  
-      }),  
-    ],
-    connectionEncrypters: [noise()],
-    streamMuxers: [yamux()],
-    connectionGater: {
-      // Allow private addresses for local testing
-      denyDialMultiaddr: async () => false,
-    },
-    peerDiscovery: [
-       bootstrap({
-         list: ['/ip4/127.0.0.1/tcp/9001/ws/p2p/12D3KooWKh9Q2WTfTBQzBrX1EgWfqZr7KkXqHDYSzJtLojT3KZ6K'  ],
-       }),
-       pubsubPeerDiscovery({
-         interval: 10_000,
-         topics: [PUBSUB_PEER_DISCOVERY],
-       }),
-    ],
-    services: {
-      pubsub: gossipsub(),
-      identify: identify(),
-    },
-  })
-
-
-  // 👇 Dial peers discovered via pubsub
-  // libp2p.addEventListener('peer:discovery', async (evt) => {
-  //   // Encapsulate the multiaddrs with the peer ID to ensure correct dialing
-  //   // Should be fixed when https://github.com/libp2p/js-libp2p/issues/3239 is resolved.
-  //   const maddrs = evt.detail.multiaddrs.map((ma) => ma.encapsulate(`/p2p/${evt.detail.id.toString()}`))
-  //   console.log(
-  //     `Discovered new peer (${evt.detail.id.toString()}). Dialling:`, maddrs.map((ma) => ma.toString()),
-  //   )
-  //   try {
-  //     await libp2p.dial(maddrs) // dial the new peer
-  //   } catch (err) {
-  //     console.error(`Failed to dial peer (${evt.detail.id.toString()}):`, err)
-  //   }
-  // })
-
-  globalThis.libp2p = libp2p
+  const libp2p = await createNewLibp2p();
+  // globalThis.libp2p = libp2p;
+  const ws = new WebSocket("ws://localhost:3000"); // Your WebSocket server
+ws.binaryType = "arraybuffer";
 
   const DOM = {
-    nodePeerId: () => document.getElementById('output-node-peer-id'),
-    nodeStatus: () => document.getElementById('output-node-status'),
-    nodePeerCount: () => document.getElementById('output-peer-count'),
-    nodePeerTypes: () => document.getElementById('output-peer-types'),
-    nodePeerDetails: () => document.getElementById('output-peer-details'),
-    nodeAddressCount: () => document.getElementById('output-address-count'),
-    nodeAddresses: () => document.getElementById('output-addresses'),
+    startstreaming: () => document.getElementById("startStream"),
+    nodePeerId: () => document.getElementById("output-node-peer-id"),
+    nodeStatus: () => document.getElementById("output-node-status"),
+    nodePeerCount: () => document.getElementById("output-peer-count"),
+    nodePeerTypes: () => document.getElementById("output-peer-types"),
+    nodePeerDetails: () => document.getElementById("output-peer-details"),
+    nodeAddressCount: () => document.getElementById("output-address-count"),
+    nodeAddresses: () => document.getElementById("output-addresses"),
 
-    inputMultiaddr: () => document.getElementById('input-multiaddr'),
-    connectButton: () => document.getElementById('button-connect'),
-    loggingButtonEnable: () => document.getElementById('button-logging-enable'),
-    loggingButtonDisable: () => document.getElementById('button-logging-disable'),
-    outputQuery: () => document.getElementById('output'),
-  }
+    inputMultiaddr: () => document.getElementById("input-multiaddr"),
+    connectButton: () => document.getElementById("button-connect"),
+    loggingButtonEnable: () => document.getElementById("button-logging-enable"),
+    loggingButtonDisable: () =>
+      document.getElementById("button-logging-disable"),
+    outputQuery: () => document.getElementById("output"),
+  };
 
-  update(DOM.nodePeerId(), libp2p.peerId.toString())
-  update(DOM.nodeStatus(), 'Online')
+  update(DOM.nodePeerId(), libp2p.peerId.toString());
+  update(DOM.nodeStatus(), "Online");
+  update(DOM.outputQuery(), "test");
 
-  libp2p.addEventListener('peer:connect', (event) => {})
-  libp2p.addEventListener('peer:disconnect', (event) => {})
+  libp2p.addEventListener("peer:connect", (event) => {});
+  libp2p.addEventListener("peer:disconnect", (event) => {});
 
   setInterval(() => {
-    update(DOM.nodePeerCount(), libp2p.getConnections().length)
-    update(DOM.nodePeerTypes(), getPeerTypes(libp2p))
-    update(DOM.nodeAddressCount(), libp2p.getMultiaddrs().length)
-    update(DOM.nodeAddresses(), getAddresses(libp2p))
-    update(DOM.nodePeerDetails(), getPeerDetails(libp2p))
-  }, 1000)
+    update(DOM.nodePeerCount(), libp2p.getConnections().length);
+    update(DOM.nodePeerTypes(), getPeerTypes(libp2p));
+    update(DOM.nodeAddressCount(), libp2p.getMultiaddrs().length);
+    update(DOM.nodeAddresses(), getAddresses(libp2p));
+    update(DOM.nodePeerDetails(), getPeerDetails(libp2p));
+  }, 1000);
+
+  DOM.startstreaming().onclick = async (e) => {
+    console.log("start streaming");
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const recorder = new MediaRecorder(stream, {
+      mimeType: "audio/webm;codecs=opus",
+      audioBitsPerSecond: 64000, // adjust quality (32k–128k typical)
+    });
+
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0 && ws.readyState === WebSocket.OPEN) {
+        e.data.arrayBuffer().then((buf) => ws.send(buf));
+      }
+    };
+
+    recorder.start(250); // send small chunks every 250ms
+    console.log("Streaming microphone via WebSocket...");
+  };
 
   DOM.loggingButtonEnable().onclick = (e) => {
-    enable('*,*:debug')
-  }
+    enable("*,*:debug");
+  };
   DOM.loggingButtonDisable().onclick = (e) => {
-    disable()
-  }
+    disable();
+  };
 
   DOM.connectButton().onclick = async (e) => {
-    e.preventDefault()
-    let maddr = multiaddr(DOM.inputMultiaddr().value)
+    e.preventDefault();
+    let maddr = multiaddr(DOM.inputMultiaddr().value);
 
-    console.log(maddr)
+    console.log(maddr);
     try {
-      await libp2p.dial(maddr)
+      await libp2p.dial(maddr);
     } catch (e) {
-      console.log(e)
+      console.log(e);
     }
-  }
-}
+  };
+};
 
 App().catch((err) => {
-  console.error(err) // eslint-disable-line no-console
-})
+  console.error(err); // eslint-disable-line no-console
+});

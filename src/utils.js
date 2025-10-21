@@ -1,4 +1,16 @@
 import { WebRTC, WebSockets, WebSocketsSecure, WebTransport, Circuit, WebRTCDirect } from '@multiformats/multiaddr-matcher'
+import { createLibp2p } from "libp2p";
+import { identify } from "@libp2p/identify";
+import { noise } from "@chainsafe/libp2p-noise";
+import { yamux } from "@chainsafe/libp2p-yamux";
+import { gossipsub } from "@chainsafe/libp2p-gossipsub";
+import { webSockets } from "@libp2p/websockets";
+import { webTransport } from "@libp2p/webtransport";
+import { webRTC } from "@libp2p/webrtc";
+import { pubsubPeerDiscovery } from "@libp2p/pubsub-peer-discovery";
+import { PUBSUB_PEER_DISCOVERY, PUBSUB_AUDIO } from "./constants";
+import { bootstrap } from "@libp2p/bootstrap";
+import { circuitRelayTransport } from "@libp2p/circuit-relay-v2";
 import { bootstrapPeers } from './constants.js'
 
 export function getAddresses(libp2p) {
@@ -88,4 +100,89 @@ export function update(element, newContent) {
   if (element.innerHTML !== newContent) {
     element.innerHTML = newContent
   }
+}
+
+export async function createNewLibp2p() {
+   const libp2p = await createLibp2p({
+      addresses: {
+        listen: [
+          // 👇 Required to create circuit relay reservations in order to hole punch browser-to-browser WebRTC connections
+          "/p2p-circuit",
+          // 👇 Listen for webRTC connection
+          "/webrtc",
+        ],
+      },
+      transports: [
+        webSockets({
+          // 允許所有WebSocket連接包括不帶TLS的
+        }),
+        webTransport(),
+        webRTC({
+          rtcConfiguration: {
+            iceServers: [
+              {
+                // STUN servers help the browser discover its own public IPs
+                urls: [
+                  "stun:stun.l.google.com:19302",
+                  "stun:global.stun.twilio.com:3478",
+                ],
+              },
+            ],
+          },
+        }),
+        // 👇 Required to create circuit relay reservations in order to hole punch browser-to-browser WebRTC connections
+        // 添加@libp2p/circuit-relay-v2-transport支持
+        circuitRelayTransport({
+          discoverRelays: 1,
+        }),
+      ],
+      connectionEncrypters: [noise()],
+      streamMuxers: [yamux()],
+      connectionGater: {
+        // Allow private addresses for local testing
+        denyDialMultiaddr: async () => false,
+      },
+      peerDiscovery: [
+        bootstrap({
+          // add your relay multiaddr here ! and rerun this client code
+          list: [
+            "/ip4/127.0.0.1/tcp/9001/ws/p2p/12D3KooWEFAazaSEFRrP63vu8rK5EBAxYZZLgcavYQFRqpBJhD7Z",
+          ],
+        }),
+        pubsubPeerDiscovery({
+          interval: 10_000,
+          topics: [PUBSUB_PEER_DISCOVERY],
+        }),
+      ],
+      services: {
+        pubsub: gossipsub({
+          allowPublishToZeroPeers: true, // Example option
+        }),
+        identify: identify(),
+      },
+    });
+
+    libp2p.services.pubsub.subscribe(PUBSUB_AUDIO)
+libp2p.addEventListener('gossipsub:heartbeat', (event) => {
+  console.log('gossipsub:heartbeat❤️', event)
+})
+  
+    // 👇 Dial peers discovered via pubsub
+    libp2p.addEventListener("peer:discovery", async (evt) => {
+      //   // Encapsulate the multiaddrs with the peer ID to ensure correct dialing
+      //   // Should be fixed when https://github.com/libp2p/js-libp2p/issues/3239 is resolved.
+      const maddrs = evt.detail.multiaddrs.map((ma) =>
+        ma.encapsulate(`/p2p/${evt.detail.id.toString()}`)
+      );
+      console.log(
+        `Discovered new peer (${evt.detail.id.toString()}). Dialling:`,
+        maddrs.map((ma) => ma.toString())
+      );
+      try {
+        await libp2p.dial(maddrs); // dial the new peer
+      } catch (err) {
+        console.error(`Failed to dial peer (${evt.detail.id.toString()}):`, err);
+      }
+    });
+  return libp2p; 
 }
